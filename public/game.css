@@ -1,0 +1,5 @@
+#canvas{
+    display: flex;
+    justify-content: center;
+    background-image: url("assets/game/background/01.jpeg");
+}

@@ -1,0 +1,185 @@
+.menu {
+    display: flex;
+    align-items: center;
+    font-size: medium;
+    padding: 20px;
+}
+.menu a {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    color: white;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.menu a:hover {
+    color: gray;
+}
+
+footer .menu {
+    position: relative;
+    justify-content: flex-end;
+    gap: 40px;
+}
+footer .menu a {
+    flex: unset;
+    display: inline;
+}
+footer .menu a:first-child {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+
+.about_pic {
+    display: flex;
+    justify-content: center;
+    padding: 30px;
+}
+.about_pic img {
+    width: 200px;
+    border-radius: 300px;
+}
+.head_content {
+    padding-top: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.body_content {
+    padding: 100px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+.about_container {
+    display: flex;
+    flex-direction: column;
+    width: 500px;
+}
+.title {
+    display: flex;
+    justify-content: center;
+    font-size: xx-large;
+    margin-bottom: 20px;
+}
+.description {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+.image_and_description {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 500px;
+}
+.about_layout {
+    width: 800px;
+    align-items: flex-start;
+}
+.left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px;
+}
+.left a {
+    width: 160px;
+    box-sizing: border-box;
+}
+.right {
+    display: flex;
+    flex-direction: column;
+    padding: 30px;
+    text-align: justify;
+}
+.play_button {
+    display: inline-flex;
+    padding: 10px 30px;
+    background-color: aquamarine;
+    color: black;
+    text-decoration: none;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.3s ease;
+}
+.gitlab_button {
+    display: inline-flex;
+    padding: 10px 30px;
+    background-color: orange;
+    color: black;
+    text-decoration: none;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.3s ease;
+}
+.gitlab_button img{
+ padding-right: 10px;
+}
+.youtube_button {
+    display: inline-flex;
+    padding: 10px 30px;
+    background-color: red;
+    color: black;
+    text-decoration: none;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.3s ease;
+}
+.youtube_button img{
+ padding-right: 10px;
+}
+.reddit_button {
+    display: inline-flex;
+    padding: 10px 30px;
+    background-color: orangered;
+    color: black;
+    text-decoration: none;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    text-align: center;
+    transition: background-color 0.3s ease;
+}
+.reddit_button img{
+ padding-right: 10px;
+}
+.play_button:hover {
+    background-color: #5dd9c1;
+}
+body {
+    background-color: black;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    margin: 0;
+    font-family: 'Courier New', Courier, monospace;
+}
+.body_content {
+    flex: 1;
+}
