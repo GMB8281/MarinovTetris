@@ -183,3 +183,6 @@ body {
 .body_content {
     flex: 1;
 }
+.button_container{
+    padding: 10px;
+}

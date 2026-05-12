@@ -3,3 +3,6 @@
     justify-content: center;
     background-image: url("assets/game/background/01.jpeg");
 }
+.canvas_container{
+    padding-bottom: 30px;
+}
