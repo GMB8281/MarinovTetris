@@ -1,4 +1,4 @@
-# PowerManagement #
+# MarinovTetris #
 
 <img src="https://gitlab.com/GMB8281/MarinovTetris/-/raw/master/public/assets/favicon.png?ref_type=heads" width="200"/> 
 
