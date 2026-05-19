@@ -1,10 +1,24 @@
-#canvas{
-    display: flex;
-    justify-content: center;
+#canvas {
+    display: block;
     background-image: url("assets/game/background/01_wide.png");
     background-repeat: no-repeat;
     background-position: center;
+    background-size: cover;
 }
-.canvas_container{
+.canvas_container {
     padding-bottom: 30px;
+    display: flex;
+    justify-content: center;
+}
+
+@media (max-width: 768px) {
+    .canvas_container {
+        width: 100%;
+        overflow: hidden;
+    }
+
+    #canvas {
+        max-width: 100%;
+        height: auto;
+    }
 }

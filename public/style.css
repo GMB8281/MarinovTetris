@@ -31,6 +31,8 @@ footer .menu a:first-child {
     left: 50%;
     transform: translateX(-50%);
     white-space: nowrap;
+    cursor: default;
+    pointer-events: none;
 }
 
 .about_pic {
@@ -77,10 +79,12 @@ footer .menu a:first-child {
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 500px;
+    max-width: 500px;
+    width: 100%;
 }
 .about_layout {
-    width: 800px;
+    max-width: 800px;
+    width: 100%;
     align-items: flex-start;
 }
 .left {
@@ -129,8 +133,8 @@ footer .menu a:first-child {
     text-align: center;
     transition: background-color 0.3s ease;
 }
-.gitlab_button img{
- padding-right: 10px;
+.gitlab_button img {
+    padding-right: 10px;
 }
 .youtube_button {
     display: inline-flex;
@@ -147,8 +151,8 @@ footer .menu a:first-child {
     text-align: center;
     transition: background-color 0.3s ease;
 }
-.youtube_button img{
- padding-right: 10px;
+.youtube_button img {
+    padding-right: 10px;
 }
 .reddit_button {
     display: inline-flex;
@@ -165,8 +169,8 @@ footer .menu a:first-child {
     text-align: center;
     transition: background-color 0.3s ease;
 }
-.reddit_button img{
- padding-right: 10px;
+.reddit_button img {
+    padding-right: 10px;
 }
 .play_button:hover {
     background-color: #5dd9c1;
@@ -183,6 +187,99 @@ body {
 .body_content {
     flex: 1;
 }
-.button_container{
+.button_container {
     padding: 10px;
+}
+
+@media (max-width: 768px) {
+
+    .body_content {
+        padding: 30px 20px;
+    }
+
+    body > .menu {
+        justify-content: center;
+        gap: 24px;
+        padding: 15px 10px;
+    }
+    body > .menu a {
+        flex: unset;
+    }
+
+    .head_content .title,
+    .head_content .description {
+        display: block;
+        width: 100%;
+        text-align: center;
+    }
+
+
+    .image_and_description .left > img {
+        max-width: 100%;
+        height: auto;
+    }
+
+    .about_pic img {
+        width: 100%;
+        max-width: 200px;
+    }
+
+    .image_and_description,
+    .about_layout {
+        flex-direction: column;
+        max-width: 100%;
+        align-items: center;
+    }
+
+    .about_layout {
+        align-items: stretch;
+    }
+
+    .left,
+    .right {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 15px 20px;
+    }
+
+    .image_and_description .right {
+        text-align: center;
+    }
+
+    .about_layout .right {
+        text-align: justify;
+    }
+
+    footer .menu {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 20px;
+        position: static;
+    }
+
+    footer .menu a {
+        flex: unset;
+        display: inline;
+    }
+
+    footer .menu a:first-child {
+        position: static;
+        transform: none;
+        white-space: normal;
+        order: -1;
+    }
+
+    footer .menu {
+        flex-wrap: wrap;
+        flex-direction: row;
+        justify-content: center;
+    }
+
+    footer .menu a:first-child {
+        flex-basis: 100%;
+        text-align: center;
+        order: -1;
+    }
 }
