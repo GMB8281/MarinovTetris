@@ -277,29 +277,29 @@ function lockPiece() {
     spawnPiece();
 }
 
-// Detect completed rows and clear them out with score increments
 function clearLines() {
     let linesCleared = 0;
     for (let r = ROWS - 1; r >= 0; r--) {
         let full = true;
         for (let c = 0; c < COLS; c++) {
-            if (board[r][c] === null) { full = false; break; }
+            if (board[r][c] === null) { 
+                full = false; 
+                break; 
+            }
         }
         if (full) {
-            // Drop rows above the cleared lines down
-            for (let rr = r; rr > 0; rr--) board[rr] = board[rr-1].slice();
-            board[0] = new Array(COLS).fill(null);
+            board.splice(r, 1);
+            board.unshift(new Array(COLS).fill(null));
             linesCleared++;
-            r++; // Repeat check on the same row index now shifted
+            r++; 
         }
     }
-    // Update score system corresponding to level metrics
+    
     if (linesCleared === 1) score += 100;
     else if (linesCleared === 2) score += 300;
     else if (linesCleared === 3) score += 500;
     else if (linesCleared === 4) score += 800;
     
-    // Play sounds and toggle visual indicators for Tetris
     if (linesCleared === 4) {
         audio_tetris.currentTime = 0;
         audio_tetris.play().catch(e => {});
