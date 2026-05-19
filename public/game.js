@@ -138,6 +138,7 @@ let gameState = 'welcome';    // 'welcome', 'playing', 'gameover', 'paused'
 
 // Speed configuration
 const BASE_DROP_DELAY = 800;
+const FAST_DROP_DELAY = 50; // ms when holding touch
 let dropDelay = BASE_DROP_DELAY; // ms between automatic drops
 
 // Timing variables for game loop
@@ -146,6 +147,16 @@ let dropAccumulator = 0;
 
 // Timer to display "Tetris" text
 let tetrisTextEndTime = 0;
+
+let touchStartX = 0;
+let touchStartY = 0;
+let touchLastX  = 0;
+let touchStartTime = 0;
+let touchHoldTimer = null;
+let isFastDrop = false;
+const TOUCH_TAP_MAX_MOVE = 15; // px total movement to still count as a tap
+const TOUCH_TAP_MAX_MS   = 300; // ms max duration for a tap
+const TOUCH_HOLD_MS      = 300; // ms hold before fast-drop activates
 
 //Clear all position
 function createBoard() {
@@ -172,7 +183,7 @@ function updateDropDelay() {
     let linesUp = ROWS - highestRow; 
     
     // Decrease drop time by effectively increasing speed 0.5x per line up
-    dropDelay = BASE_DROP_DELAY / (1 + 0.3 * linesUp);
+    dropDelay = BASE_DROP_DELAY / (1 + 0.2 * linesUp);
 }
 
 // Get the shape array currently active
@@ -594,8 +605,10 @@ function gameLoop(timestamp) {
         lastTime = timestamp;
 
         dropAccumulator += delta;
-        while (dropAccumulator >= dropDelay) {
-            dropAccumulator -= dropDelay;
+        // Use fast drop delay when holding touch, otherwise normal speed
+        let currentDropDelay = isFastDrop ? FAST_DROP_DELAY : dropDelay;
+        while (dropAccumulator >= currentDropDelay) {
+            dropAccumulator -= currentDropDelay;
             moveDown();
         }
         draw();
@@ -645,7 +658,7 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// Click handler for buttons
+// Click handler for buttons (mouse)
 canvas.addEventListener('click', function(e) {
     let rect = canvas.getBoundingClientRect();
     let scaleX = canvas.width / rect.width;
@@ -679,6 +692,92 @@ canvas.addEventListener('click', function(e) {
         }
     }
 });
+
+canvas.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    let touch = e.changedTouches[0];
+    touchStartX    = touch.clientX;
+    touchStartY    = touch.clientY;
+    touchLastX     = touch.clientX;
+    touchStartTime = performance.now();
+    isFastDrop     = false;
+
+    clearTimeout(touchHoldTimer);
+    // Activate fast drop after holding still for TOUCH_HOLD_MS
+    touchHoldTimer = setTimeout(function() {
+        if (gameState === 'playing') {
+            isFastDrop = true;
+        }
+    }, TOUCH_HOLD_MS);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    if (gameState !== 'playing') return;
+
+    let touch = e.changedTouches[0];
+    let rect = canvas.getBoundingClientRect();
+    let scaleX = canvas.width / rect.width;
+
+    // How wide one board cell is in real screen pixels
+    let cellScreenPx = CELL_SIZE / scaleX;
+
+    let dx = touch.clientX - touchLastX;
+    if (dx >= cellScreenPx) {
+        moveRight();
+        touchLastX += cellScreenPx;
+        // Any horizontal movement cancels the hold timer
+        clearTimeout(touchHoldTimer);
+        isFastDrop = false;
+    } else if (dx <= -cellScreenPx) {
+        moveLeft();
+        touchLastX -= cellScreenPx;
+        clearTimeout(touchHoldTimer);
+        isFastDrop = false;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    clearTimeout(touchHoldTimer);
+    isFastDrop = false;
+
+    let touch = e.changedTouches[0];
+    let totalDx  = Math.abs(touch.clientX - touchStartX);
+    let totalDy  = Math.abs(touch.clientY - touchStartY);
+    let elapsed  = performance.now() - touchStartTime;
+    let isTap    = totalDx < TOUCH_TAP_MAX_MOVE &&
+                   totalDy < TOUCH_TAP_MAX_MOVE &&
+                   elapsed < TOUCH_TAP_MAX_MS;
+
+    if (!isTap) return;
+
+    // Resolve canvas coordinates for button hit-testing
+    let rect   = canvas.getBoundingClientRect();
+    let scaleX = canvas.width  / rect.width;
+    let scaleY = canvas.height / rect.height;
+    let tapX   = (touch.clientX - rect.left) * scaleX;
+    let tapY   = (touch.clientY - rect.top)  * scaleY;
+
+    function hitBtn(b) {
+        return b && tapX >= b.x && tapX <= b.x + b.w &&
+                    tapY >= b.y && tapY <= b.y + b.h;
+    }
+
+    if (gameState === 'welcome' && hitBtn(canvas.welcomeBtn)) {
+        resetGame();
+    } else if (gameState === 'gameover' && hitBtn(canvas.gameoverBtn)) {
+        resetGame();
+    } else if (gameState === 'playing' && hitBtn(canvas.pauseBtn)) {
+        pauseGame();
+    } else if (gameState === 'paused' && hitBtn(canvas.continueBtn)) {
+        resumeGame();
+    } else if (gameState === 'playing') {
+        // Tap on the game area → rotate
+        rotatePiece();
+    }
+}, { passive: false });
+
 
 createBoard();
 playMenuMusic();
