@@ -11,6 +11,10 @@ audio_game.loop = true;
 const audio_tetris = new Audio('assets/game/audio/effects/tetris.wav');
 const audio_clear = new Audio('assets/game/audio/effects/clear_line.wav');
 
+// UI Assets
+const img_pause = new Image();
+img_pause.src = 'assets/game/button/ic_pause.svg';
+
 // Stop all audio and reset times
 function stopAllAudio() {
     audio_menu.pause();
@@ -40,13 +44,7 @@ const INFO_WIDTH = 180;
 
 //Piece construction using square sprites dynamically
 ///I am using pieceIndex in order to get a piece
-// 0 = O
-// 1 = S
-// 2 = Z
-// 3 = J
-// 4 = L
-// 5 = I
-// 7 = T
+// 0 = O, 1 = S, 2 = Z, 3 = J, 4 = L, 5 = I, 7 = T
 const pieces = [
     {
         name: 'O',
@@ -132,12 +130,15 @@ pieces.forEach(piece => {
 });
 
 //Game state variables
-let board = []; //Board array, positions have pieces or are empty
-let currentPiece = null;      // { pieceIndex, rotIndex, row, col }
-let nextPieceIndex = null;    // index of next piece
+let board = []; 
+let currentPiece = null;      
+let nextPieceIndex = null;    
 let score = 0;
-let gameState = 'welcome';    // 'welcome', 'playing', 'gameover'
-let dropDelay = 800;          // ms between automatic drops, to fix speed bug
+let gameState = 'welcome';    // 'welcome', 'playing', 'gameover', 'paused'
+
+// Speed configuration
+const BASE_DROP_DELAY = 800;
+let dropDelay = BASE_DROP_DELAY; // ms between automatic drops
 
 // Timing variables for game loop
 let lastTime = 0;
@@ -152,6 +153,26 @@ function createBoard() {
     for (let r = 0; r < ROWS; r++) {
         board[r] = new Array(COLS).fill(null);
     }
+}
+
+// Update game speed based on stack height
+function updateDropDelay() {
+    let highestRow = ROWS;
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            if (board[r][c] !== null) {
+                highestRow = r;
+                break;
+            }
+        }
+        if (highestRow !== ROWS) break; // Found the highest block
+    }
+    
+    // Calculates how many lines have been built up from the bottom
+    let linesUp = ROWS - highestRow; 
+    
+    // Decrease drop time by effectively increasing speed 0.5x per line up
+    dropDelay = BASE_DROP_DELAY / (1 + 0.3 * linesUp);
 }
 
 // Get the shape array currently active
@@ -196,7 +217,8 @@ function lockPiece() {
     if (!currentPiece) return;
     let shape = getCurrentShape();
     let pieceIndex = currentPiece.pieceIndex;
-    // Fill board cells with piece index (so we can later draw with correct sprite)
+    
+    // Fill board cells with piece index
     for (let i = 0; i < shape.length; i++) {
         let r = currentPiece.row + shape[i][0];
         let c = currentPiece.col + shape[i][1];
@@ -204,10 +226,14 @@ function lockPiece() {
             board[r][c] = pieceIndex;
         }
     }
-    // Clear completed lines
+    
+    // Clear completed lines and adjust game speed based on stack height
     clearLines();
+    updateDropDelay(); 
+    
     // Reset drop accumulator so new piece doesn't drop instantly
     dropAccumulator = 0;
+    
     // Spawn next piece
     spawnPiece();
 }
@@ -267,12 +293,10 @@ function spawnPiece() {
 
     // Calculate starting column (centered)
     let shape = pieces[pieceIndex].rotations[0];
-    //Determine max column e and min columm to determine piece size
     let minC = Math.min(...shape.map(p => p[1]));
     let maxC = Math.max(...shape.map(p => p[1]));
     let pieceWidth = maxC - minC + 1;
     let startCol = Math.floor((COLS - pieceWidth) / 2);
-    // Position Piece on center
     let startRow = 0;
 
     currentPiece = {
@@ -309,13 +333,26 @@ function moveRight() {
 // Rotate piece
 function rotatePiece() {
     if (!currentPiece || gameState !== 'playing') return;
-    // O piece does not rotate
-    if (currentPiece.pieceIndex === 0) return;
+    if (currentPiece.pieceIndex === 0) return; // O piece does not rotate
     let newRot = (currentPiece.rotIndex + 1) % pieces[currentPiece.pieceIndex].rotations.length;
     if (isValidPosition(currentPiece.pieceIndex, newRot,
                         currentPiece.row, currentPiece.col)) {
         currentPiece.rotIndex = newRot;
     }
+}
+
+// Pause and Resume Functions
+function pauseGame() {
+    if (gameState !== 'playing') return;
+    gameState = 'paused';
+    audio_game.pause(); // Pause music without changing playback speed or time
+}
+
+function resumeGame() {
+    if (gameState !== 'paused') return;
+    gameState = 'playing';
+    audio_game.play().catch(e => {}); // Resume music
+    lastTime = performance.now(); // Prevent block from dropping instantly after pause
 }
 
 // Reset entire game (for new game)
@@ -324,14 +361,13 @@ function resetGame() {
     score = 0;
     nextPieceIndex = null;
     currentPiece = null;
-    dropDelay = 800;
+    updateDropDelay(); // reset speed
     dropAccumulator = 0;
     gameState = 'playing';
-    tetrisTextEndTime = 0; // clear any leftover text
+    tetrisTextEndTime = 0; 
     spawnPiece();
     playGameMusic();
 }
-
 
 function drawBoard() {
     // Draw board background
@@ -372,7 +408,7 @@ function drawBoard() {
 }
 
 function drawCurrentPiece() {
-    if (!currentPiece || gameState !== 'playing') return;
+    if (!currentPiece || (gameState !== 'playing' && gameState !== 'paused')) return;
     let shape = getCurrentShape();
     if (!shape) return;
     let img = pieces[currentPiece.pieceIndex].img;
@@ -381,7 +417,6 @@ function drawCurrentPiece() {
     for (let i = 0; i < shape.length; i++) {
         let r = currentPiece.row + shape[i][0];
         let c = currentPiece.col + shape[i][1];
-        // Draw only if inside visible board area
         if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
             ctx.drawImage(img,
                 BOARD_X + c * CELL_SIZE,
@@ -448,7 +483,6 @@ function drawWelcomeOverlay() {
 
     let btnWidth = 150;
     let btnHeight = 50;
-    //Align button on center
     let btnX = canvas.width / 2 - btnWidth / 2;
     let btnY = 280;
     ctx.fillStyle = '#4CAF50';
@@ -476,7 +510,6 @@ function drawGameOverOverlay() {
 
     let btnWidth = 160;
     let btnHeight = 50;
-    //Align button on center
     let btnX = canvas.width / 2 - btnWidth / 2;
     let btnY = 280;
     ctx.fillStyle = '#f44336';
@@ -489,16 +522,53 @@ function drawGameOverOverlay() {
     canvas.gameoverBtn = { x: btnX, y: btnY, w: btnWidth, h: btnHeight };
 }
 
+// PauseScreen
+function drawPauseOverlay() {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 36px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText('Game paused', canvas.width / 2, 180);
+    ctx.textAlign = 'start';
+
+    let btnWidth = 160;
+    let btnHeight = 50;
+    let btnX = canvas.width / 2 - btnWidth / 2;
+    let btnY = 280;
+    ctx.fillStyle = '#2196F3'; // Blue for continue
+    ctx.fillRect(btnX, btnY, btnWidth, btnHeight);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 24px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText('Continue', canvas.width / 2, btnY + 35);
+    ctx.textAlign = 'start';
+    canvas.continueBtn = { x: btnX, y: btnY, w: btnWidth, h: btnHeight };
+}
+
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (gameState === 'playing' || gameState === 'gameover') {
+    if (gameState === 'playing' || gameState === 'gameover' || gameState === 'paused') {
         drawInfoPanel();
         drawBoard();
         drawCurrentPiece();
 
+        // Draw Pause button
+        if (gameState === 'playing') {
+            // Positioned top right, safely inside canvas borders
+            let pauseBtnX = canvas.width - 60;
+            let pauseBtnY = 20;
+            canvas.pauseBtn = { x: pauseBtnX, y: pauseBtnY, w: 40, h: 40 };
+            
+            if (img_pause.complete) {
+                ctx.drawImage(img_pause, canvas.pauseBtn.x, canvas.pauseBtn.y, canvas.pauseBtn.w, canvas.pauseBtn.h);
+            }
+        }
+
         // Display "Tetris" text when four lines are cleared
-        if (gameState === 'playing' && tetrisTextEndTime > performance.now()) {
+        if ((gameState === 'playing' || gameState === 'paused') && tetrisTextEndTime > performance.now()) {
             ctx.fillStyle = '#FFD700';
             ctx.font = 'bold 48px Courier New';
             ctx.textAlign = 'center';
@@ -507,10 +577,13 @@ function draw() {
         }
     }
 
+    // Overlays
     if (gameState === 'welcome') {
         drawWelcomeOverlay();
     } else if (gameState === 'gameover') {
         drawGameOverOverlay();
+    } else if (gameState === 'paused') {
+        drawPauseOverlay();
     }
 }
 
@@ -528,14 +601,26 @@ function gameLoop(timestamp) {
         draw();
     } else {
         draw();
-        lastTime = timestamp;
+        // Keep lastTime updated even when paused so the piece won't drop instantly on resume
+        lastTime = timestamp; 
     }
     requestAnimationFrame(gameLoop);
 }
 
-//Keyboad events
+//Keyboard events
 document.addEventListener('keydown', function(e) {
+    // Handle Escape key for Pause Toggle
+    if (e.key === 'Escape') {
+        if (gameState === 'playing') {
+            pauseGame();
+        } else if (gameState === 'paused') {
+            resumeGame();
+        }
+        return; // Early return prevents pieces from moving
+    }
+
     if (gameState !== 'playing') return;
+    
     switch(e.key) {
         case 'ArrowLeft':
         case 'a':
@@ -579,6 +664,18 @@ canvas.addEventListener('click', function(e) {
         if (mouseX >= b.x && mouseX <= b.x + b.w &&
             mouseY >= b.y && mouseY <= b.y + b.h) {
             resetGame();
+        }
+    } else if (gameState === 'playing' && canvas.pauseBtn) {
+        let b = canvas.pauseBtn;
+        if (mouseX >= b.x && mouseX <= b.x + b.w &&
+            mouseY >= b.y && mouseY <= b.y + b.h) {
+            pauseGame();
+        }
+    } else if (gameState === 'paused' && canvas.continueBtn) {
+        let b = canvas.continueBtn;
+        if (mouseX >= b.x && mouseX <= b.x + b.w &&
+            mouseY >= b.y && mouseY <= b.y + b.h) {
+            resumeGame();
         }
     }
 });
