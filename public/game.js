@@ -688,11 +688,14 @@ document.addEventListener('keydown', function(e) {
         else if (gameState === 'paused') resumeGame();
         return;
     }
-    // Pause with space bar
+    // Pause / resume with space bar
     if (e.key === ' ' || e.key === 'Spacebar') {
         if (gameState === 'playing') {
             e.preventDefault();
             pauseGame();
+        } else if (gameState === 'paused') {
+            e.preventDefault();
+            resumeGame();
         }
         return;
     }
