@@ -1,56 +1,104 @@
 let canvas = document.getElementById('canvas');
 let ctx = canvas.getContext('2d');
 
-// Soundtracks
+// Game background music and tracks
 const audio_menu = new Audio('assets/game/audio/main_menu.mp3');
 audio_menu.loop = true;
 const audio_game = new Audio('assets/game/audio/game_track.mp3');
 audio_game.loop = true;
 
-// Sound effects
+// Game sound effects
 const audio_tetris = new Audio('assets/game/audio/effects/tetris.wav');
 const audio_clear = new Audio('assets/game/audio/effects/clear_line.wav');
 
-// UI Assets
+// Game UI elements
 const img_pause = new Image();
 img_pause.src = 'assets/game/button/ic_pause.svg';
 
-// Stop all audio and reset times
+// Stop all audio currently playing and reset playback position
 function stopAllAudio() {
     audio_menu.pause();
     audio_menu.currentTime = 0;
     audio_game.pause();
     audio_game.currentTime = 0;
 }
+
+// Start playing menu background music
 function playMenuMusic() {
     stopAllAudio();
     audio_menu.play().catch(e => {});
 }
+
+// Start playing active game background music
 function playGameMusic() {
     stopAllAudio();
     audio_game.play().catch(e => {});
 }
 
-// Tetris Board Settings, board width and height declared as multiplication for future expansion
+// Grid configuration constants
 const COLS = 10;
 const ROWS = 20;
-const CELL_SIZE = 25;
-const BOARD_X = 180;
-const BOARD_Y = 0;
-const BOARD_WIDTH = COLS * CELL_SIZE;
-const BOARD_HEIGHT = ROWS * CELL_SIZE;
-const INFO_X = 0;
-const INFO_WIDTH = 180;
 
-//Piece construction using square sprites dynamically
-///I am using pieceIndex in order to get a piece
-// 0 = O, 1 = S, 2 = Z, 3 = J, 4 = L, 5 = I, 7 = T
+// Holds calculations for responsive grid positioning and sizing
+let layout = {};
+
+// Computes the coordinates and cell sizes based on device screen width
+function computeLayout() {
+    let w = canvas.width;
+    if (w >= 500) {
+        // Desktop or large screen configuration
+        let cellSize = 25;
+        let infoWidth = 180;
+        let boardWidth = COLS * cellSize;
+        let boardHeight = ROWS * cellSize;
+        let boardX = Math.max(infoWidth, Math.floor((w - boardWidth) / 2));
+        return {
+            mobile: false,
+            cellSize: cellSize,
+            boardX: boardX,
+            boardY: 0,
+            boardWidth: boardWidth,
+            boardHeight: boardHeight,
+            infoX: 0,
+            infoWidth: infoWidth,
+            topBarH: 0,
+            canvasHeight: boardHeight
+        };
+    } else {
+        // Mobile layout with top bar container
+        let topBarH = 65;
+        let cellSize = Math.floor(w / COLS);
+        return {
+            mobile: true,
+            cellSize: cellSize,
+            boardX: 0,
+            boardY: topBarH,
+            boardWidth: COLS * cellSize,
+            boardHeight: ROWS * cellSize,
+            infoX: 0,
+            infoWidth: w,
+            topBarH: topBarH,
+            canvasHeight: topBarH + ROWS * cellSize
+        };
+    }
+}
+
+// Resizes canvas element dynamically to adapt to viewports
+function resizeCanvas() {
+    let parent = canvas.parentElement;
+    let w = (parent ? parent.clientWidth : 0) || window.innerWidth;
+    canvas.width = w;
+    layout = computeLayout();
+    canvas.height = layout.canvasHeight;
+}
+
+// Piece construction using square sprites dynamically
+// Piece index references: 0 = O, 1 = S, 2 = Z, 3 = J, 4 = L, 5 = I, 7 = T
 const pieces = [
     {
         name: 'O',
         sprite: 'assets/game/sprites/yellow_square.png',
         img: null,
-        // O piece has only one orientation (no rotation)
         rotations: [
             [[0,0],[0,1],[1,0],[1,1]]
         ]
@@ -115,50 +163,49 @@ const pieces = [
         sprite: 'assets/game/sprites/purple_square.png',
         img: null,
         rotations: [
-            [[0,0],[0,1],[0,2],[1,1]],  // T pointing down
-            [[0,1],[1,0],[1,1],[2,1]],  // T pointing left
-            [[0,1],[1,0],[1,1],[1,2]],  // T pointing up (added missing orientation)
-            [[0,0],[1,0],[1,1],[2,0]]   // T pointing right
+            [[0,0],[0,1],[0,2],[1,1]],
+            [[0,1],[1,0],[1,1],[2,1]],
+            [[0,1],[1,0],[1,1],[1,2]],
+            [[0,0],[1,0],[1,1],[2,0]]
         ]
     }
 ];
 
-// Image construcition for pieces
+// Initialize and load images for each individual block sprite
 pieces.forEach(piece => {
     piece.img = new Image();
     piece.img.src = piece.sprite;
 });
 
-//Game state variables
-let board = []; 
-let currentPiece = null;      
-let nextPieceIndex = null;    
+// Grid board tracking cells and current states
+let board = [];
+let currentPiece = null;
+let nextPieceIndex = null;
 let score = 0;
-let gameState = 'welcome';    // 'welcome', 'playing', 'gameover', 'paused'
+let gameState = 'welcome'; // Options: 'welcome', 'playing', 'gameover', 'paused'
 
-// Speed configuration
+// Gravity timing parameters
 const BASE_DROP_DELAY = 800;
-const FAST_DROP_DELAY = 50; // ms when holding touch
-let dropDelay = BASE_DROP_DELAY; // ms between automatic drops
+const FAST_DROP_DELAY = 50; // Delay in milliseconds when pulling piece down
+let dropDelay = BASE_DROP_DELAY; // Dynamic interval based on score and lines built
 
-// Timing variables for game loop
+// Game loop tracking variables
 let lastTime = 0;
 let dropAccumulator = 0;
+let tetrisTextEndTime = 0; // Track the ending display time for high score overlay
 
-// Timer to display "Tetris" text
-let tetrisTextEndTime = 0;
-
+// Touch interaction configurations
 let touchStartX = 0;
 let touchStartY = 0;
-let touchLastX  = 0;
+let touchLastX = 0;
 let touchStartTime = 0;
 let touchHoldTimer = null;
 let isFastDrop = false;
-const TOUCH_TAP_MAX_MOVE = 15; // px total movement to still count as a tap
-const TOUCH_TAP_MAX_MS   = 300; // ms max duration for a tap
-const TOUCH_HOLD_MS      = 300; // ms hold before fast-drop activates
+const TOUCH_TAP_MAX_MOVE = 15; // Threshold in pixels to identify tap action
+const TOUCH_TAP_MAX_MS = 300; // Duration limit in milliseconds for a valid tap
+const TOUCH_HOLD_MS = 300; // Time frame in milliseconds before activating speed descent
 
-//Clear all position
+// Initialize grid rows with empty state values
 function createBoard() {
     board = [];
     for (let r = 0; r < ROWS; r++) {
@@ -166,50 +213,41 @@ function createBoard() {
     }
 }
 
-// Update game speed based on stack height
+// Update game speed dynamically as block height grows
 function updateDropDelay() {
     let highestRow = ROWS;
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
-            if (board[r][c] !== null) {
-                highestRow = r;
-                break;
-            }
+            if (board[r][c] !== null) { highestRow = r; break; }
         }
-        if (highestRow !== ROWS) break; // Found the highest block
+        if (highestRow !== ROWS) break;
     }
-    
-    // Calculates how many lines have been built up from the bottom
-    let linesUp = ROWS - highestRow; 
-    
-    // Decrease drop time by effectively increasing speed 0.5x per line up
+    // Calculate vertical stack progression from the bottom bounds
+    let linesUp = ROWS - highestRow;
+    // Increase descent acceleration based on vertical blocks present
     dropDelay = BASE_DROP_DELAY / (1 + 0.2 * linesUp);
 }
 
-// Get the shape array currently active
+// Extract block coordinate map according to current rotation state
 function getCurrentShape() {
     if (!currentPiece) return null;
     return pieces[currentPiece.pieceIndex].rotations[currentPiece.rotIndex];
 }
 
-// Check if the position is valid for the given piece
+// Validate boundary rules and structural block collisions
 function isValidPosition(pieceIndex, rotIndex, row, col) {
     let shape = pieces[pieceIndex].rotations[rotIndex];
     for (let i = 0; i < shape.length; i++) {
         let r = row + shape[i][0];
         let c = col + shape[i][1];
-        if (c < 0 || c >= COLS || r >= ROWS) {
-            return false; // out of bounds
-        }
-        if (r < 0) continue; // above the board is allowed
-        if (board[r][c] !== null) {
-            return false; // cell already occupied
-        }
+        if (c < 0 || c >= COLS || r >= ROWS) return false;
+        if (r < 0) continue;
+        if (board[r][c] !== null) return false;
     }
     return true;
 }
 
-// Move the current piece down by one cell if possible; returns true on success
+// Attempt to shift the active falling piece down one unit
 function moveDown() {
     if (!currentPiece || gameState !== 'playing') return false;
     let newRow = currentPiece.row + 1;
@@ -217,107 +255,79 @@ function moveDown() {
         currentPiece.row = newRow;
         return true;
     } else {
-        // Lock the piece in place
         lockPiece();
         return false;
     }
 }
 
-// Lock the current piece onto the board, clear lines, and spawn next
+// Lock the current falling piece into the static board structure
 function lockPiece() {
     if (!currentPiece) return;
     let shape = getCurrentShape();
     let pieceIndex = currentPiece.pieceIndex;
-    
-    // Fill board cells with piece index
     for (let i = 0; i < shape.length; i++) {
         let r = currentPiece.row + shape[i][0];
         let c = currentPiece.col + shape[i][1];
-        if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-            board[r][c] = pieceIndex;
-        }
+        if (r >= 0 && r < ROWS && c >= 0 && c < COLS) board[r][c] = pieceIndex;
     }
-    
-    // Clear completed lines and adjust game speed based on stack height
     clearLines();
-    updateDropDelay(); 
-    
-    // Reset drop accumulator so new piece doesn't drop instantly
+    updateDropDelay();
+    // Flush descent accumulation tracking to prevent immediate drop of the next piece
     dropAccumulator = 0;
-    
-    // Spawn next piece
     spawnPiece();
 }
 
-// Clear full lines and update score
+// Detect completed rows and clear them out with score increments
 function clearLines() {
     let linesCleared = 0;
     for (let r = ROWS - 1; r >= 0; r--) {
         let full = true;
         for (let c = 0; c < COLS; c++) {
-            if (board[r][c] === null) {
-                full = false;
-                break;
-            }
+            if (board[r][c] === null) { full = false; break; }
         }
         if (full) {
-            // Remove this row
-            for (let rr = r; rr > 0; rr--) {
-                board[rr] = board[rr-1].slice();
-            }
+            // Drop rows above the cleared lines down
+            for (let rr = r; rr > 0; rr--) board[rr] = board[rr-1].slice();
             board[0] = new Array(COLS).fill(null);
             linesCleared++;
-            r++; // check the same row again
+            r++; // Repeat check on the same row index now shifted
         }
     }
-    // Update score based on lines cleared
+    // Update score system corresponding to level metrics
     if (linesCleared === 1) score += 100;
     else if (linesCleared === 2) score += 300;
     else if (linesCleared === 3) score += 500;
     else if (linesCleared === 4) score += 800;
-
-    // Play sound effects and possibly show "Tetris" text
+    
+    // Play sounds and toggle visual indicators for Tetris
     if (linesCleared === 4) {
         audio_tetris.currentTime = 0;
         audio_tetris.play().catch(e => {});
-        tetrisTextEndTime = performance.now() + 2000; // show text for 2 seconds
+        tetrisTextEndTime = performance.now() + 2000;
     } else if (linesCleared > 0) {
         audio_clear.currentTime = 0;
         audio_clear.play().catch(e => {});
     }
 }
 
-// Generate a random piece index
+// Retrieve index of a randomly chosen tetris piece
 function randomPiece() {
     return Math.floor(Math.random() * pieces.length);
 }
 
-// Spawn a new piece; if fails => game over
+// Generate the next block piece or trigger gameover state if blocked
 function spawnPiece() {
-    let pieceIndex;
-    if (nextPieceIndex !== null) {
-        pieceIndex = nextPieceIndex;
-    } else {
-        pieceIndex = randomPiece();
-    }
-    nextPieceIndex = randomPiece(); // prepare next piece
-
-    // Calculate starting column (centered)
+    let pieceIndex = nextPieceIndex !== null ? nextPieceIndex : randomPiece();
+    nextPieceIndex = randomPiece();
+    // Determine horizontal start centering placement
     let shape = pieces[pieceIndex].rotations[0];
     let minC = Math.min(...shape.map(p => p[1]));
     let maxC = Math.max(...shape.map(p => p[1]));
-    let pieceWidth = maxC - minC + 1;
-    let startCol = Math.floor((COLS - pieceWidth) / 2);
+    let startCol = Math.floor((COLS - (maxC - minC + 1)) / 2);
     let startRow = 0;
 
-    currentPiece = {
-        pieceIndex: pieceIndex,
-        rotIndex: 0,
-        row: startRow,
-        col: startCol
-    };
-
-    // Check if the spawn position is valid
+    currentPiece = { pieceIndex: pieceIndex, rotIndex: 0, row: startRow, col: startCol };
+    // Trigger gameover state if block immediately overlaps on birth
     if (!isValidPosition(pieceIndex, 0, startRow, startCol)) {
         gameState = 'gameover';
         currentPiece = null;
@@ -325,83 +335,76 @@ function spawnPiece() {
     }
 }
 
-// Move piece left/right
+// Handle lateral move commands
 function moveLeft() {
     if (!currentPiece || gameState !== 'playing') return;
-    if (isValidPosition(currentPiece.pieceIndex, currentPiece.rotIndex,
-                        currentPiece.row, currentPiece.col - 1)) {
+    if (isValidPosition(currentPiece.pieceIndex, currentPiece.rotIndex, currentPiece.row, currentPiece.col - 1))
         currentPiece.col--;
-    }
 }
+
 function moveRight() {
     if (!currentPiece || gameState !== 'playing') return;
-    if (isValidPosition(currentPiece.pieceIndex, currentPiece.rotIndex,
-                        currentPiece.row, currentPiece.col + 1)) {
+    if (isValidPosition(currentPiece.pieceIndex, currentPiece.rotIndex, currentPiece.row, currentPiece.col + 1))
         currentPiece.col++;
-    }
 }
 
-// Rotate piece
+// Rotate the active piece configuration
 function rotatePiece() {
     if (!currentPiece || gameState !== 'playing') return;
-    if (currentPiece.pieceIndex === 0) return; // O piece does not rotate
+    if (currentPiece.pieceIndex === 0) return; // Skip O piece as rotation produces identical bounds
     let newRot = (currentPiece.rotIndex + 1) % pieces[currentPiece.pieceIndex].rotations.length;
-    if (isValidPosition(currentPiece.pieceIndex, newRot,
-                        currentPiece.row, currentPiece.col)) {
+    if (isValidPosition(currentPiece.pieceIndex, newRot, currentPiece.row, currentPiece.col))
         currentPiece.rotIndex = newRot;
-    }
 }
 
-// Pause and Resume Functions
+// Pause and Resume logic operations
 function pauseGame() {
     if (gameState !== 'playing') return;
     gameState = 'paused';
-    audio_game.pause(); // Pause music without changing playback speed or time
+    audio_game.pause();
 }
 
 function resumeGame() {
     if (gameState !== 'paused') return;
     gameState = 'playing';
-    audio_game.play().catch(e => {}); // Resume music
-    lastTime = performance.now(); // Prevent block from dropping instantly after pause
+    audio_game.play().catch(e => {});
+    lastTime = performance.now();
 }
 
-// Reset entire game (for new game)
+// Standardize states for a clean new game cycle
 function resetGame() {
     createBoard();
     score = 0;
     nextPieceIndex = null;
     currentPiece = null;
-    updateDropDelay(); // reset speed
+    updateDropDelay();
     dropAccumulator = 0;
     gameState = 'playing';
-    tetrisTextEndTime = 0; 
+    tetrisTextEndTime = 0;
     spawnPiece();
     playGameMusic();
 }
 
+// Render game environment and block borders
 function drawBoard() {
-    // Draw board background
     ctx.fillStyle = '#111';
-    ctx.fillRect(BOARD_X, BOARD_Y, BOARD_WIDTH, BOARD_HEIGHT);
+    ctx.fillRect(layout.boardX, layout.boardY, layout.boardWidth, layout.boardHeight);
 
-    // Draw grid lines
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 0.5;
     for (let r = 0; r <= ROWS; r++) {
         ctx.beginPath();
-        ctx.moveTo(BOARD_X, BOARD_Y + r * CELL_SIZE);
-        ctx.lineTo(BOARD_X + BOARD_WIDTH, BOARD_Y + r * CELL_SIZE);
+        ctx.moveTo(layout.boardX, layout.boardY + r * layout.cellSize);
+        ctx.lineTo(layout.boardX + layout.boardWidth, layout.boardY + r * layout.cellSize);
         ctx.stroke();
     }
     for (let c = 0; c <= COLS; c++) {
         ctx.beginPath();
-        ctx.moveTo(BOARD_X + c * CELL_SIZE, BOARD_Y);
-        ctx.lineTo(BOARD_X + c * CELL_SIZE, BOARD_Y + BOARD_HEIGHT);
+        ctx.moveTo(layout.boardX + c * layout.cellSize, layout.boardY);
+        ctx.lineTo(layout.boardX + c * layout.cellSize, layout.boardY + layout.boardHeight);
         ctx.stroke();
     }
 
-    // Draw locked cells
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
             let pieceIndex = board[r][c];
@@ -409,15 +412,16 @@ function drawBoard() {
                 let img = pieces[pieceIndex].img;
                 if (img && img.complete) {
                     ctx.drawImage(img,
-                        BOARD_X + c * CELL_SIZE,
-                        BOARD_Y + r * CELL_SIZE,
-                        CELL_SIZE, CELL_SIZE);
+                        layout.boardX + c * layout.cellSize,
+                        layout.boardY + r * layout.cellSize,
+                        layout.cellSize, layout.cellSize);
                 }
             }
         }
     }
 }
 
+// Draw current user-controlled active piece
 function drawCurrentPiece() {
     if (!currentPiece || (gameState !== 'playing' && gameState !== 'paused')) return;
     let shape = getCurrentShape();
@@ -430,83 +434,151 @@ function drawCurrentPiece() {
         let c = currentPiece.col + shape[i][1];
         if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
             ctx.drawImage(img,
-                BOARD_X + c * CELL_SIZE,
-                BOARD_Y + r * CELL_SIZE,
-                CELL_SIZE, CELL_SIZE);
+                layout.boardX + c * layout.cellSize,
+                layout.boardY + r * layout.cellSize,
+                layout.cellSize, layout.cellSize);
         }
     }
 }
 
+// Render high scores, control icons, and piece previews
 function drawInfoPanel() {
-    // Draw info panel background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(INFO_X, 0, INFO_WIDTH, canvas.height);
+    if (layout.mobile) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        ctx.fillRect(0, 0, canvas.width, layout.topBarH);
 
-    // Score
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px Courier New';
-    ctx.fillText('Score:', INFO_X + 10, 40);
-    ctx.font = '16px Courier New';
-    ctx.fillText(score, INFO_X + 10, 70);
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'start';
+        ctx.font = 'bold 13px Courier New';
+        ctx.fillText('Score', 10, 22);
+        ctx.font = '13px Courier New';
+        ctx.fillText(score, 10, 42);
 
-    // Next piece label
-    ctx.font = 'bold 18px Courier New';
-    ctx.fillText('Next:', INFO_X + 10, 130);
+        ctx.font = 'bold 13px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('Next', canvas.width / 2, 16);
 
-    // Draw next piece preview
-    if (nextPieceIndex !== null) {
-        let shape = pieces[nextPieceIndex].rotations[0];
-        let img = pieces[nextPieceIndex].img;
-        if (img && img.complete) {
-            let previewCellSize = 20;
-            let minR = Math.min(...shape.map(p => p[0]));
-            let maxR = Math.max(...shape.map(p => p[0]));
-            let minC = Math.min(...shape.map(p => p[1]));
-            let maxC = Math.max(...shape.map(p => p[1]));
-            let width = (maxC - minC + 1) * previewCellSize;
-            let height = (maxR - minR + 1) * previewCellSize;
-            let offsetX = INFO_X + (INFO_WIDTH - width) / 2;
-            let offsetY = 160;
-            for (let i = 0; i < shape.length; i++) {
-                let rowOffset = shape[i][0] - minR;
-                let colOffset = shape[i][1] - minC;
-                ctx.drawImage(img,
-                    offsetX + colOffset * previewCellSize,
-                    offsetY + rowOffset * previewCellSize,
-                    previewCellSize, previewCellSize);
+        if (nextPieceIndex !== null) {
+            let shape = pieces[nextPieceIndex].rotations[0];
+            let img = pieces[nextPieceIndex].img;
+            if (img && img.complete) {
+                let pcs = 12;
+                let minR = Math.min(...shape.map(p => p[0]));
+                let minC = Math.min(...shape.map(p => p[1]));
+                let maxC = Math.max(...shape.map(p => p[1]));
+                let pw = (maxC - minC + 1) * pcs;
+                let offsetX = canvas.width / 2 - pw / 2;
+                let offsetY = 22;
+                for (let i = 0; i < shape.length; i++) {
+                    ctx.drawImage(img,
+                        offsetX + (shape[i][1] - minC) * pcs,
+                        offsetY + (shape[i][0] - minR) * pcs,
+                        pcs, pcs);
+                }
+            }
+        }
+
+        if (gameState === 'playing') {
+            let pbW = 32, pbH = 32;
+            let pbX = canvas.width - pbW - 10;
+            let pbY = Math.floor((layout.topBarH - pbH) / 2);
+            canvas.pauseBtn = { x: pbX, y: pbY, w: pbW, h: pbH };
+            if (img_pause.complete) ctx.drawImage(img_pause, pbX, pbY, pbW, pbH);
+        }
+
+        ctx.textAlign = 'start';
+    } else {
+        // Desktop visual layout setup
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(layout.infoX, 0, layout.boardX, canvas.height);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 18px Courier New';
+        ctx.fillText('Score:', layout.infoX + 10, 40);
+        ctx.font = '16px Courier New';
+        ctx.fillText(score, layout.infoX + 10, 70);
+
+        ctx.font = 'bold 18px Courier New';
+        ctx.fillText('Next:', layout.infoX + 10, 130);
+
+        if (nextPieceIndex !== null) {
+            let shape = pieces[nextPieceIndex].rotations[0];
+            let img = pieces[nextPieceIndex].img;
+            if (img && img.complete) {
+                let previewCellSize = 20;
+                let minR = Math.min(...shape.map(p => p[0]));
+                let minC = Math.min(...shape.map(p => p[1]));
+                let maxC = Math.max(...shape.map(p => p[1]));
+                let width = (maxC - minC + 1) * previewCellSize;
+                let offsetX = layout.infoX + (layout.infoWidth - width) / 2;
+                let offsetY = 160;
+                for (let i = 0; i < shape.length; i++) {
+                    ctx.drawImage(img,
+                        offsetX + (shape[i][1] - minC) * previewCellSize,
+                        offsetY + (shape[i][0] - minR) * previewCellSize,
+                        previewCellSize, previewCellSize);
+                }
             }
         }
     }
 }
 
-// WelcomeScreen
+// Welcome splash screen graphics
 function drawWelcomeOverlay() {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 36px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText('MarinovTetris [BETA]', canvas.width / 2, 180);
-    ctx.font = '18px Courier New';
-    ctx.fillText('An opensource Tetris game, enjoy!', canvas.width / 2, 220);
-    ctx.textAlign = 'start';
+    if (layout.mobile) {
+        let cx = canvas.width / 2;
+        let cy = canvas.height / 2;
+        let pad = 16;
 
-    let btnWidth = 150;
-    let btnHeight = 50;
-    let btnX = canvas.width / 2 - btnWidth / 2;
-    let btnY = 280;
-    ctx.fillStyle = '#4CAF50';
-    ctx.fillRect(btnX, btnY, btnWidth, btnHeight);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 24px Courier New';
-    ctx.textAlign = 'center';
-    ctx.fillText('Play!', canvas.width / 2, btnY + 35);
-    ctx.textAlign = 'start';
-    canvas.welcomeBtn = { x: btnX, y: btnY, w: btnWidth, h: btnHeight };
+        let titleFontSize = Math.min(28, Math.floor((canvas.width - pad * 2) / 9));
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.font = 'bold ' + titleFontSize + 'px Courier New';
+        ctx.fillText('MarinovTetris', cx, cy - 80);
+
+        let subFontSize = Math.min(15, Math.floor((canvas.width - pad * 2) / 18));
+        ctx.font = subFontSize + 'px Courier New';
+        ctx.fillText('An opensource Tetris game,', cx, cy - 80 + titleFontSize + 10);
+        ctx.fillText('enjoy!', cx, cy - 80 + titleFontSize + 10 + subFontSize + 6);
+
+        let btnWidth = Math.min(140, canvas.width - pad * 2);
+        let btnHeight = 44;
+        let btnX = cx - btnWidth / 2;
+        let btnY = cy - 80 + titleFontSize + 10 + subFontSize * 2 + 28;
+        ctx.fillStyle = '#4CAF50';
+        ctx.fillRect(btnX, btnY, btnWidth, btnHeight);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 20px Courier New';
+        ctx.fillText('Play!', cx, btnY + 30);
+        ctx.textAlign = 'start';
+        canvas.welcomeBtn = { x: btnX, y: btnY, w: btnWidth, h: btnHeight };
+    } else {
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 36px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('MarinovTetris', canvas.width / 2, 180);
+        ctx.font = '18px Courier New';
+        ctx.fillText('An opensource Tetris game, enjoy!', canvas.width / 2, 220);
+        ctx.textAlign = 'start';
+
+        let btnWidth = 150, btnHeight = 50;
+        let btnX = canvas.width / 2 - btnWidth / 2;
+        let btnY = 280;
+        ctx.fillStyle = '#4CAF50';
+        ctx.fillRect(btnX, btnY, btnWidth, btnHeight);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 24px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText('Play!', canvas.width / 2, btnY + 35);
+        ctx.textAlign = 'start';
+        canvas.welcomeBtn = { x: btnX, y: btnY, w: btnWidth, h: btnHeight };
+    }
 }
 
-// GameOverScreen
+// Screen view setup when falling blocks hit top boundary
 function drawGameOverOverlay() {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -519,8 +591,7 @@ function drawGameOverOverlay() {
     ctx.fillText('Score: ' + score, canvas.width / 2, 220);
     ctx.textAlign = 'start';
 
-    let btnWidth = 160;
-    let btnHeight = 50;
+    let btnWidth = 160, btnHeight = 50;
     let btnX = canvas.width / 2 - btnWidth / 2;
     let btnY = 280;
     ctx.fillStyle = '#f44336';
@@ -533,7 +604,7 @@ function drawGameOverOverlay() {
     canvas.gameoverBtn = { x: btnX, y: btnY, w: btnWidth, h: btnHeight };
 }
 
-// PauseScreen
+// Render active state pause overlay screen
 function drawPauseOverlay() {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -544,11 +615,10 @@ function drawPauseOverlay() {
     ctx.fillText('Game paused', canvas.width / 2, 180);
     ctx.textAlign = 'start';
 
-    let btnWidth = 160;
-    let btnHeight = 50;
+    let btnWidth = 160, btnHeight = 50;
     let btnX = canvas.width / 2 - btnWidth / 2;
     let btnY = 280;
-    ctx.fillStyle = '#2196F3'; // Blue for continue
+    ctx.fillStyle = '#2196F3';
     ctx.fillRect(btnX, btnY, btnWidth, btnHeight);
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 24px Courier New';
@@ -558,6 +628,7 @@ function drawPauseOverlay() {
     canvas.continueBtn = { x: btnX, y: btnY, w: btnWidth, h: btnHeight };
 }
 
+// Core rendering manager that decides which visual layer gets drawn
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -566,29 +637,22 @@ function draw() {
         drawBoard();
         drawCurrentPiece();
 
-        // Draw Pause button
-        if (gameState === 'playing') {
-            // Positioned top right, safely inside canvas borders
+        if (gameState === 'playing' && !layout.mobile) {
             let pauseBtnX = canvas.width - 60;
             let pauseBtnY = 20;
             canvas.pauseBtn = { x: pauseBtnX, y: pauseBtnY, w: 40, h: 40 };
-            
-            if (img_pause.complete) {
-                ctx.drawImage(img_pause, canvas.pauseBtn.x, canvas.pauseBtn.y, canvas.pauseBtn.w, canvas.pauseBtn.h);
-            }
+            if (img_pause.complete) ctx.drawImage(img_pause, canvas.pauseBtn.x, canvas.pauseBtn.y, canvas.pauseBtn.w, canvas.pauseBtn.h);
         }
 
-        // Display "Tetris" text when four lines are cleared
         if ((gameState === 'playing' || gameState === 'paused') && tetrisTextEndTime > performance.now()) {
             ctx.fillStyle = '#FFD700';
             ctx.font = 'bold 48px Courier New';
             ctx.textAlign = 'center';
-            ctx.fillText('Tetris', BOARD_X + BOARD_WIDTH / 2, BOARD_Y + BOARD_HEIGHT / 2);
+            ctx.fillText('Tetris', layout.boardX + layout.boardWidth / 2, layout.boardY + layout.boardHeight / 2);
             ctx.textAlign = 'start';
         }
     }
 
-    // Overlays
     if (gameState === 'welcome') {
         drawWelcomeOverlay();
     } else if (gameState === 'gameover') {
@@ -598,14 +662,12 @@ function draw() {
     }
 }
 
-//Game execution
+// RequestAnimationFrame standard cycle updating state models
 function gameLoop(timestamp) {
     if (gameState === 'playing') {
         let delta = timestamp - lastTime;
         lastTime = timestamp;
-
         dropAccumulator += delta;
-        // Use fast drop delay when holding touch, otherwise normal speed
         let currentDropDelay = isFastDrop ? FAST_DROP_DELAY : dropDelay;
         while (dropAccumulator >= currentDropDelay) {
             dropAccumulator -= currentDropDelay;
@@ -614,51 +676,28 @@ function gameLoop(timestamp) {
         draw();
     } else {
         draw();
-        // Keep lastTime updated even when paused so the piece won't drop instantly on resume
-        lastTime = timestamp; 
+        lastTime = timestamp;
     }
     requestAnimationFrame(gameLoop);
 }
 
-//Keyboard events
+// Map physical hardware keyboard buttons to game actions
 document.addEventListener('keydown', function(e) {
-    // Handle Escape key for Pause Toggle
     if (e.key === 'Escape') {
-        if (gameState === 'playing') {
-            pauseGame();
-        } else if (gameState === 'paused') {
-            resumeGame();
-        }
-        return; // Early return prevents pieces from moving
+        if (gameState === 'playing') pauseGame();
+        else if (gameState === 'paused') resumeGame();
+        return;
     }
-
     if (gameState !== 'playing') return;
-    
     switch(e.key) {
-        case 'ArrowLeft':
-        case 'a':
-            e.preventDefault();
-            moveLeft();
-            break;
-        case 'ArrowRight':
-        case 'd':
-            e.preventDefault();
-            moveRight();
-            break;
-        case 'ArrowDown':
-        case 's':
-            e.preventDefault();
-            moveDown();
-            break;
-        case 'ArrowUp':
-        case 'w':
-            e.preventDefault();
-            rotatePiece();
-            break;
+        case 'ArrowLeft': case 'a': e.preventDefault(); moveLeft(); break;
+        case 'ArrowRight': case 'd': e.preventDefault(); moveRight(); break;
+        case 'ArrowDown': case 's': e.preventDefault(); moveDown(); break;
+        case 'ArrowUp': case 'w': e.preventDefault(); rotatePiece(); break;
     }
 });
 
-// Click handler for buttons (mouse)
+// Capture mouse pointer tap dynamics on graphical buttons
 canvas.addEventListener('click', function(e) {
     let rect = canvas.getBoundingClientRect();
     let scaleX = canvas.width / rect.width;
@@ -668,31 +707,20 @@ canvas.addEventListener('click', function(e) {
 
     if (gameState === 'welcome' && canvas.welcomeBtn) {
         let b = canvas.welcomeBtn;
-        if (mouseX >= b.x && mouseX <= b.x + b.w &&
-            mouseY >= b.y && mouseY <= b.y + b.h) {
-            resetGame();
-        }
+        if (mouseX >= b.x && mouseX <= b.x + b.w && mouseY >= b.y && mouseY <= b.y + b.h) resetGame();
     } else if (gameState === 'gameover' && canvas.gameoverBtn) {
         let b = canvas.gameoverBtn;
-        if (mouseX >= b.x && mouseX <= b.x + b.w &&
-            mouseY >= b.y && mouseY <= b.y + b.h) {
-            resetGame();
-        }
+        if (mouseX >= b.x && mouseX <= b.x + b.w && mouseY >= b.y && mouseY <= b.y + b.h) resetGame();
     } else if (gameState === 'playing' && canvas.pauseBtn) {
         let b = canvas.pauseBtn;
-        if (mouseX >= b.x && mouseX <= b.x + b.w &&
-            mouseY >= b.y && mouseY <= b.y + b.h) {
-            pauseGame();
-        }
+        if (mouseX >= b.x && mouseX <= b.x + b.w && mouseY >= b.y && mouseY <= b.y + b.h) pauseGame();
     } else if (gameState === 'paused' && canvas.continueBtn) {
         let b = canvas.continueBtn;
-        if (mouseX >= b.x && mouseX <= b.x + b.w &&
-            mouseY >= b.y && mouseY <= b.y + b.h) {
-            resumeGame();
-        }
+        if (mouseX >= b.x && mouseX <= b.x + b.w && mouseY >= b.y && mouseY <= b.y + b.h) resumeGame();
     }
 });
 
+// Configure start point parameters on touchscreen interactions
 canvas.addEventListener('touchstart', function(e) {
     e.preventDefault();
     let touch = e.changedTouches[0];
@@ -703,14 +731,12 @@ canvas.addEventListener('touchstart', function(e) {
     isFastDrop     = false;
 
     clearTimeout(touchHoldTimer);
-    // Activate fast drop after holding still for TOUCH_HOLD_MS
     touchHoldTimer = setTimeout(function() {
-        if (gameState === 'playing') {
-            isFastDrop = true;
-        }
+        if (gameState === 'playing') isFastDrop = true;
     }, TOUCH_HOLD_MS);
 }, { passive: false });
 
+// Translate swipe motions into dynamic piece movements or drops
 canvas.addEventListener('touchmove', function(e) {
     e.preventDefault();
     if (gameState !== 'playing') return;
@@ -718,15 +744,15 @@ canvas.addEventListener('touchmove', function(e) {
     let touch = e.changedTouches[0];
     let rect = canvas.getBoundingClientRect();
     let scaleX = canvas.width / rect.width;
+    let scaleY = canvas.height / rect.height;
 
-    // How wide one board cell is in real screen pixels
-    let cellScreenPx = CELL_SIZE / scaleX;
+    let cellScreenPx = layout.cellSize / scaleX;
+    let cellScreenPy = layout.cellSize / scaleY;
 
     let dx = touch.clientX - touchLastX;
     if (dx >= cellScreenPx) {
         moveRight();
         touchLastX += cellScreenPx;
-        // Any horizontal movement cancels the hold timer
         clearTimeout(touchHoldTimer);
         isFastDrop = false;
     } else if (dx <= -cellScreenPx) {
@@ -735,24 +761,30 @@ canvas.addEventListener('touchmove', function(e) {
         clearTimeout(touchHoldTimer);
         isFastDrop = false;
     }
+
+    let dy = touch.clientY - touchStartY;
+    if (dy > cellScreenPy && !isFastDrop) {
+        clearTimeout(touchHoldTimer);
+        isFastDrop = true;
+    }
 }, { passive: false });
 
+// Evaluate touch release to determine tap signals or rotation actions
 canvas.addEventListener('touchend', function(e) {
     e.preventDefault();
     clearTimeout(touchHoldTimer);
     isFastDrop = false;
 
     let touch = e.changedTouches[0];
-    let totalDx  = Math.abs(touch.clientX - touchStartX);
-    let totalDy  = Math.abs(touch.clientY - touchStartY);
-    let elapsed  = performance.now() - touchStartTime;
-    let isTap    = totalDx < TOUCH_TAP_MAX_MOVE &&
-                   totalDy < TOUCH_TAP_MAX_MOVE &&
-                   elapsed < TOUCH_TAP_MAX_MS;
+    let totalDx = Math.abs(touch.clientX - touchStartX);
+    let totalDy = Math.abs(touch.clientY - touchStartY);
+    let elapsed = performance.now() - touchStartTime;
+    let isTap   = totalDx < TOUCH_TAP_MAX_MOVE &&
+                  totalDy < TOUCH_TAP_MAX_MOVE &&
+                  elapsed < TOUCH_TAP_MAX_MS;
 
     if (!isTap) return;
 
-    // Resolve canvas coordinates for button hit-testing
     let rect   = canvas.getBoundingClientRect();
     let scaleX = canvas.width  / rect.width;
     let scaleY = canvas.height / rect.height;
@@ -760,8 +792,7 @@ canvas.addEventListener('touchend', function(e) {
     let tapY   = (touch.clientY - rect.top)  * scaleY;
 
     function hitBtn(b) {
-        return b && tapX >= b.x && tapX <= b.x + b.w &&
-                    tapY >= b.y && tapY <= b.y + b.h;
+        return b && tapX >= b.x && tapX <= b.x + b.w && tapY >= b.y && tapY <= b.y + b.h;
     }
 
     if (gameState === 'welcome' && hitBtn(canvas.welcomeBtn)) {
@@ -773,12 +804,15 @@ canvas.addEventListener('touchend', function(e) {
     } else if (gameState === 'paused' && hitBtn(canvas.continueBtn)) {
         resumeGame();
     } else if (gameState === 'playing') {
-        // Tap on the game area → rotate
         rotatePiece();
     }
 }, { passive: false });
 
+// Bind automatic resize behaviors
+window.addEventListener('resize', resizeCanvas);
 
+// Launch sequence setup on initial page load
+resizeCanvas();
 createBoard();
 playMenuMusic();
 lastTime = performance.now();
