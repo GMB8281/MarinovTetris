@@ -45,7 +45,7 @@ let layout = {};
 // Computes the coordinates and cell sizes based on device screen width
 function computeLayout() {
     let w = canvas.width;
-    if (w >= 500) {
+    if (w >= 600) {
         // Desktop or large screen configuration
         let cellSize = 25;
         let infoWidth = 180;
@@ -686,6 +686,25 @@ document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         if (gameState === 'playing') pauseGame();
         else if (gameState === 'paused') resumeGame();
+        return;
+    }
+    // Pause with space bar
+    if (e.key === ' ' || e.key === 'Spacebar') {
+        if (gameState === 'playing') {
+            e.preventDefault();
+            pauseGame();
+        }
+        return;
+    }
+    // Enter key for buttons
+    if (e.key === 'Enter') {
+        if (gameState === 'welcome' || gameState === 'gameover') {
+            e.preventDefault();
+            resetGame();
+        } else if (gameState === 'paused') {
+            e.preventDefault();
+            resumeGame();
+        }
         return;
     }
     if (gameState !== 'playing') return;
