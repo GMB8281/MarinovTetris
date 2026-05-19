@@ -7,6 +7,10 @@ audio_menu.loop = true;
 const audio_game = new Audio('assets/game/audio/game_track.mp3');
 audio_game.loop = true;
 
+// Sound effects
+const audio_tetris = new Audio('assets/game/audio/effects/tetris.wav');
+const audio_clear = new Audio('assets/game/audio/effects/clear_line.wav');
+
 // Stop all audio and reset times
 function stopAllAudio() {
     audio_menu.pause();
@@ -48,10 +52,8 @@ const pieces = [
         name: 'O',
         sprite: 'assets/game/sprites/yellow_square.png',
         img: null,
+        // O piece has only one orientation (no rotation)
         rotations: [
-            [[0,0],[0,1],[1,0],[1,1]],
-            [[0,0],[0,1],[1,0],[1,1]],
-            [[0,0],[0,1],[1,0],[1,1]],
             [[0,0],[0,1],[1,0],[1,1]]
         ]
     },
@@ -115,10 +117,10 @@ const pieces = [
         sprite: 'assets/game/sprites/purple_square.png',
         img: null,
         rotations: [
-            [[0,0],[0,1],[0,2],[1,1]],
-            [[0,1],[1,0],[1,1],[2,1]],
-            [[1,0],[1,1],[1,2],[2,1]],
-            [[0,0],[1,0],[1,1],[2,0]]
+            [[0,0],[0,1],[0,2],[1,1]],  // T pointing down
+            [[0,1],[1,0],[1,1],[2,1]],  // T pointing left
+            [[0,1],[1,0],[1,1],[1,2]],  // T pointing up (added missing orientation)
+            [[0,0],[1,0],[1,1],[2,0]]   // T pointing right
         ]
     }
 ];
@@ -140,6 +142,9 @@ let dropDelay = 800;          // ms between automatic drops, to fix speed bug
 // Timing variables for game loop
 let lastTime = 0;
 let dropAccumulator = 0;
+
+// Timer to display "Tetris" text
+let tetrisTextEndTime = 0;
 
 //Clear all position
 function createBoard() {
@@ -233,6 +238,16 @@ function clearLines() {
     else if (linesCleared === 2) score += 300;
     else if (linesCleared === 3) score += 500;
     else if (linesCleared === 4) score += 800;
+
+    // Play sound effects and possibly show "Tetris" text
+    if (linesCleared === 4) {
+        audio_tetris.currentTime = 0;
+        audio_tetris.play().catch(e => {});
+        tetrisTextEndTime = performance.now() + 2000; // show text for 2 seconds
+    } else if (linesCleared > 0) {
+        audio_clear.currentTime = 0;
+        audio_clear.play().catch(e => {});
+    }
 }
 
 // Generate a random piece index
@@ -294,7 +309,9 @@ function moveRight() {
 // Rotate piece
 function rotatePiece() {
     if (!currentPiece || gameState !== 'playing') return;
-    let newRot = (currentPiece.rotIndex + 1) % 4;
+    // O piece does not rotate
+    if (currentPiece.pieceIndex === 0) return;
+    let newRot = (currentPiece.rotIndex + 1) % pieces[currentPiece.pieceIndex].rotations.length;
     if (isValidPosition(currentPiece.pieceIndex, newRot,
                         currentPiece.row, currentPiece.col)) {
         currentPiece.rotIndex = newRot;
@@ -310,6 +327,7 @@ function resetGame() {
     dropDelay = 800;
     dropAccumulator = 0;
     gameState = 'playing';
+    tetrisTextEndTime = 0; // clear any leftover text
     spawnPiece();
     playGameMusic();
 }
@@ -478,6 +496,15 @@ function draw() {
         drawInfoPanel();
         drawBoard();
         drawCurrentPiece();
+
+        // Display "Tetris" text when four lines are cleared
+        if (gameState === 'playing' && tetrisTextEndTime > performance.now()) {
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 48px Courier New';
+            ctx.textAlign = 'center';
+            ctx.fillText('Tetris', BOARD_X + BOARD_WIDTH / 2, BOARD_Y + BOARD_HEIGHT / 2);
+            ctx.textAlign = 'start';
+        }
     }
 
     if (gameState === 'welcome') {
